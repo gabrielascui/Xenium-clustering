@@ -65,7 +65,7 @@ cd ${OUTPUT_DIR}
 cp -r ${PIPELINE_FOLDER}/slurm .
 
 if [[ $(wc -l $CLUSTER_CONFIG) > 0 ]]; then 
-  sed -i 's|/home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/snakem_try/cluster_slurm.json|'"${CLUSTER_CONFIG}"'|g' ${OUTPUT_DIR}/slurm/config.yaml;
+  sed -i 's|/home/fcastaneda/bin/spatial_clustering/cluster_slurm.json|'"${CLUSTER_CONFIG}"'|g' ${OUTPUT_DIR}/slurm/config.yaml;
   echo "Using user defined HPC resources";
   else echo "Using HPC resouces defined in the slurm folder"; 
 fi
@@ -97,7 +97,7 @@ sed -i 's|cp -R ./.*${PROJ.*|cp -r . ${PROJDIR}/|g' ${JOBFILE}.sh # copy from sc
 echo "Job file: ${JOBFILE}.sh"
 echo "Pushing critical lines..."
 
-sed -i 's|{walltime}|36:00:00|g' ${JOBFILE}.sh
+sed -i 's|{walltime}|100:00:00|g' ${JOBFILE}.sh
 sed -i 's|{nodes}|1|g' ${JOBFILE}.sh
 sed -i 's|{ppn}|1|g' ${JOBFILE}.sh
 sed -i 's|{mem}|8gb|g' ${JOBFILE}.sh

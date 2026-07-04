@@ -1,0 +1,43 @@
+### config yaml for Spatial transcriptomics
+project_name: PBT_slide2
+output_dir: "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/preethi_projects/spatial/results/clustering"
+# path to the Cell Ranger ouput from IGM
+input_expression: 
+  - "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/preethi_projects/spatial/raw/cellranger/output-XETG00386__0076954__Region_1__20250812__204445_new_segmentation/outs"
+  - "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/preethi_projects/spatial/raw/cellranger/output-XETG00386__0043461__Region_1__20241025__201136_new_segmentation/outs/"
+metadata:
+#   # - "/home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/results/v2/DICE_LungAdjacent/30pct30pc/metadata_30pct30pc.rds"
+  - "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/preethi_projects/spatial/info/PBT_slide2_cells_TMA_reseg.csv" #The tissue metadata always have to have a column called "orig.TMA_core" and the cell's ids in the first row 
+metadata_donor:
+  - "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/preethi_projects/spatial/info/PBT_slide2_metadata_donor.csv~TMA_core"
+filtering:
+  subset:
+    expr: "nCount_Xenium > 10"
+    # expr: "orig.Diagnosis == ''"
+  nSamples_expressed: 0.001 # % of cells in which that gene is present
+regress_var: [nCount_Xenium]
+norm: LogNormalize
+variable_features:
+  file: "no_file"
+  method: vst
+  nfeatures: 2000
+  percent: [20, 25, 30]  # iterated
+  mean.cutoff: [0.01, 8]
+  dispersion.cutoff: [1, Inf]
+resolution: [0.1, 0.2, 0.4, 0.6, 0.8] # iterated during markers
+dim_reduction:
+  base: {type: pca, n_comp: 40, chosen_comp: [15,20,25,30]} # iterated: chosen
+  umap: {n.neighbors: 10, min.dist: 0.1}
+markers:
+  select: snn_res. # pattern in the metadata's columns. Redundant
+  test: MAST
+  max_cells_per_cluster: 5000 # applies to MAST; set higher/lower to tune memory vs power
+  seed: 1
+  avg_logFC: 0.25
+  p_val_adj: 0.05
+  to_plot: ['BAP1', 'WT1', 'PDCD1', 'CD3E', 'CD8A', 'CD8B', 'CD4', 'LAG3', 'CTLA4', 'FOXP3', 'SOX2', 'MSI1', ITGAE]
+exec: /mnt/hpc-apps/R/4.3.3/bin/Rscript
+pipeline: /home/fcastaneda/bin/spatial_clustering/
+R_module: R/4.3.3 #if defined, it will use this module version to run the analysis, if not it will use your default
+cluster_config: /home/fcastaneda/bin/spatial_clustering/cluster_slurm.json #HPC resources definition
+conda_env: clustering_new #Compatible with Ciro's clustering env

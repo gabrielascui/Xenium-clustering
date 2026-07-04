@@ -8,6 +8,8 @@
 # Date: 2025-06-24
 # Version 1.0.0
 ## This script will only process cellranger output and create the transcript.csv file needed. 
+    # v2.0.0: Customization for multiple slides
+
 # ---
 
 ######################
@@ -27,22 +29,19 @@ optlist <- list(
     optparse::make_option(
     opt_str = c("-v", "--verbose"), default = TRUE,
     help = "Verbose: Show progress."
+  ),
+    optparse::make_option(
+    opt_str = c("-s", "--slide"), default = 1,
+    help = "Verbose: Show progress."
   )
 )
 
 # Getting arguments from command line
 opt <- optparse::parse_args(optparse::OptionParser(option_list = optlist))
 
-resources = c(
-  "/home/ciro/scripts/handy_functions/devel/file_reading.R", # readfile
-  "/home/fcastaneda/bin/quality_control/utilities.R",
-  "/home/kmlanderos/scripts/handy_functions/devel/filters.R", # sample_even
-  "/home/ciro/scripts/clustering/R/plotting.R",  # variable_features_report
-  #"/home/fcastaneda/bin/clustering/R/plotting.R" #plots of clustering pipeline
-  "/home/ciro/scripts/handy_functions/R/stats_summary_table.R", # stats_summary_table
-  "/home/ciro/scripts/figease/figease.R"
-)
-for(i in resources){ source(i) }
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1])
+script_dir <- if(length(script_file) && !is.na(script_file)) dirname(normalizePath(script_file)) else "R"
+source(file.path(script_dir, "functions.R"))
 
 get_transcripts_csv<-function(cellranger_path){ 
     cat ("transcripts.csv file not present \n"); 
@@ -81,26 +80,34 @@ get_transcripts_csv<-function(cellranger_path){
 
 # opt parameters have the priority
 if(interactive()){ # Example/manually
-  opt$yaml = "/home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/config.yaml"
+  opt$yaml = "config.yaml"
   opt$verbose <- TRUE
+  opt$slide <- 1
 }
 
 config = yaml::read_yaml(opt$yaml)
+outdir_sp = "." #This need to change to an option to run it without the snakemake
 if(interactive()) outdir_sp= paste0(config$output_dir, "/", config$project_name)
-outdir_sp = "." #This need to change to five the user an option to run it without the snakemake
+
 config = yaml::read_yaml(opt$yaml)
-cellranger_out= config$input_expression
+cellranger_out= config$input_expression[opt$slide]
 setwd(outdir_sp)
 cat("Working in:", getwd(), "\n")
 
 if(opt$verbose) cat('Date and time:\n') ; st.time <- timestamp();
 if(opt$verbose) cat("Current directory: ", getwd() , "\n") ;
 
-## Chekinf if parquet files are already in csv as required for Seurat
-if(!dir.exists(config$input_expression)) stop("Cellranger input and yaml input expression doesn't match") # probably this is unneessary in the snakemake
-files_cellranger <- list.files(cellranger_out)
-if(!any(grepl("transcripts.csv.gz", files_cellranger))) { get_transcripts_csv(cellranger_out) } 
-writeLines("transcripts.csv.gz from parquet file processed", ".transcripts_done.txt")
+if(grepl("init|.rds", cellranger_out)) { 
+  cat("Assumming this is not the first clustering run \n ") 
+  file_type <- "RDS_file_provided"
+} else {
+  file_type <- "parquet"
+## Checking if parquet files are already in csv as required for Seurat
+  if(!dir.exists(cellranger_out)) stop("Xenium-ranger result folder doesn't exist") # probably this is unneessary in the snakemake
+  files_cellranger <- list.files(cellranger_out)
+  if(!any(grepl("transcripts.csv.gz", files_cellranger))) { get_transcripts_csv(cellranger_out) } else cat("transcripts.csv.gz exists for slide ", opt$slide)
+}
+writeLines(paste0("transcripts.csv.gz from ",file_type ," file processed"), paste0("transcripts_done_slide", opt$slide, ".txt"))
 
 
 if(opt$verbose){

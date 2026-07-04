@@ -6,19 +6,26 @@
         "processor" : "1",
         "memory" : "80"
     },
+    "get_transcripts_csv":
+    {
+        "walltime" : "10:00:00",
+        "cores" : "1",
+        "processor" : "1",
+        "memory" : "10"
+    },
     "getting_expression_data":
     {
         "walltime" : "10:00:00",
         "cores" : "1",
         "processor" : "1",
-        "memory" : "400"
+        "memory" : "800"
     },
     "init_object":
     {
-        "walltime" : "25:00:00",
+        "walltime" : "72:00:00",
         "cores" : "1",
         "processor" : "6",
-        "memory" : "400"
+        "memory" : "500"
     },
     "report_components":
     {

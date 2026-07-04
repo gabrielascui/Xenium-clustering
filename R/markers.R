@@ -21,7 +21,7 @@
 lib4.3path = "/home/fcastaneda/R/x86_64-pc-linux-gnu-library/4.3"
 if(grepl("4.3", getRversion()) && file.exists(lib4.3path))
   .libPaths(new = lib4.3path)
-options(future.globals.maxSize= 13312*1024^2)
+options(future.globals.maxSize= 20480*1024^2)
 
 library(optparse)
 optlist <- list(
@@ -49,6 +49,10 @@ optlist <- list(
     opt_str = c("-i", "--init_file"), type = "character",
     help = "Prefix for output. Name of the files."
   ),
+  optparse::make_option(
+    opt_str = c("--init"), type = "character",
+    help = "Init object file from Snakemake."
+  ),
     optparse::make_option(
     opt_str = c("-v", "--verbose"), default = TRUE,
     help = "Verbose: Show progress."
@@ -58,18 +62,10 @@ optlist <- list(
 # Getting arguments from command line
 opt <- optparse::parse_args(optparse::OptionParser(option_list = optlist))
 
-resources = c(
-  "/home/ciro/scripts/handy_functions/devel/file_reading.R", # readfile
-  "/home/fcastaneda/bin/quality_control/utilities.R",
-  "/home/kmlanderos/scripts/handy_functions/devel/filters.R", # sample_even
-  "/home/ciro/scripts/clustering/R/plotting.R",  # variable_features_report
-  #"/home/fcastaneda/bin/clustering/R/plotting.R" #plots of clustering pipeline
-  "/home/ciro/scripts/handy_functions/R/stats_summary_table.R", # stats_summary_table
-  "/home/ciro/scripts/figease/figease.R"
-)
-for(i in resources){ source(i) }
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1])
+script_dir <- if(length(script_file) && !is.na(script_file)) dirname(normalizePath(script_file)) else "R"
+source(file.path(script_dir, "functions.R"))
 
-#source("/home/ciro/scripts/figease/figease.R")
 library(ggplot2)
 library(reshape2)
 library(dplyr)
@@ -77,16 +73,32 @@ library(Seurat)
 library(parallel)
 library(Seurat)
 library(plotly)
+library(BPCells)
+
+sample_cells_per_cluster <- function(object, cluster_column, max_cells_per_cluster = 5000, seed = 1) {
+  if(is.null(max_cells_per_cluster) || is.na(max_cells_per_cluster) || max_cells_per_cluster <= 0) {
+    return(Cells(object))
+  }
+  set.seed(seed)
+  cells_by_cluster <- split(rownames(object@meta.data), object@meta.data[, cluster_column])
+  unname(unlist(lapply(cells_by_cluster, function(cluster_cells) {
+    if(length(cluster_cells) > max_cells_per_cluster) {
+      sample(cluster_cells, max_cells_per_cluster)
+    } else {
+      cluster_cells
+    }
+  })))
+}
 
 # opt parameters have the priority
 if(interactive()){ # Example/manually
-  opt$yaml = "/home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/config.yaml"
+  opt$yaml = "config.yaml"
   opt$verbose <- TRUE
-  opt$percent <- 30
-  opt$resolution <- 0.1
+  opt$percent <- 50
+  opt$resolution <- 0.8
   opt$chosen_comp <- 30
-  opt$init_file <- ".object_init_mean0.01_pct30_pc30.rds"
-  opt$prefix <- "init_mean0.01_pct30_pc30_res0.1"
+  opt$init_file <- ".object_init_mean0.01_pct50_pc30.rds"
+  opt$prefix <- "init_mean0.01_pct50_pc30_res0.8"
 }
 
 config = yaml::read_yaml(opt$yaml)
@@ -94,6 +106,11 @@ cellranger_out= config$input_expression
 pcts= opt$percent
 pc= opt$chosen_comp
 res <- opt$resolution
+max_cells_per_cluster <- config$markers$max_cells_per_cluster
+if(is.null(max_cells_per_cluster)) max_cells_per_cluster <- 5000
+marker_seed <- config$markers$seed
+if(is.null(marker_seed)) marker_seed <- 1
+if(!is.null(opt$init) && is.null(opt$init_file)) opt$init_file <- opt$init
 
 if(interactive()) outdir_sp= paste0(config$output_dir, "/", config$project_name)
 outdir_sp = "."
@@ -109,17 +126,28 @@ checking_init <- paste0("pct", pcts, "_pc", pc, ".rds")
 if(!grepl(checking_init, opt$init_file)) stop("Init file doesn't mach with pct or pc given!")
 xenium.obj <- readRDS(opt$init_file)
 
-        resolution_cho<-res
+      for(resolution_cho in config$resolution) {
         comn_resolution<<-paste0(pcts, "pct", pc, "pc_res",resolution_cho)
-        dir.create(comn_resolution)
+        dir.create(comn_resolution, showWarnings = FALSE)
         cat(paste("Performing: ",comn_resolution, "\n"))
         cluster_value<- ifelse(grepl(config$norm, "sctransform"), paste0("SCT_snn_res.", resolution_cho), paste0("Xenium_snn_res.", resolution_cho))
 
         xenium.obj@meta.data[, cluster_value] <- factor(xenium.obj@meta.data[, cluster_value], levels=c(0:length(unique(xenium.obj@meta.data[, cluster_value]))))
 
         Idents(xenium.obj) <- cluster_value
-        source("/home/fcastaneda/bin/clustering/R/stats_summary_table.R")
-
+        marker_obj <- xenium.obj
+        if(grepl("MAST", config$markers$test, ignore.case = TRUE)) {
+          marker_cells <- sample_cells_per_cluster(
+            object = xenium.obj,
+            cluster_column = cluster_value,
+            max_cells_per_cluster = max_cells_per_cluster,
+            seed = marker_seed
+          )
+          cat("MAST marker testing using ", length(marker_cells), " sampled cells; max ",
+              max_cells_per_cluster, " per cluster.\n", sep = "")
+          marker_obj <- subset(xenium.obj, cells = marker_cells)
+          Idents(marker_obj) <- cluster_value
+        }
            cat("Running DGEA with FindAllMarkers \n")
 
           markers_file_name <- paste0("/4.dgea_",config$markers$test, "_fc",config$markers$avg_logFC,"_padj", config$markers$p_val_adj)
@@ -127,7 +155,7 @@ xenium.obj <- readRDS(opt$init_file)
           file_dgea_1 <- paste0(comn_resolution, "/.", markers_file_name, "_summary_stats.csv")
           
           if(!file.exists(file_dgea)){ 
-            all_markers<-FindAllMarkers(object = xenium.obj, 
+            all_markers<-FindAllMarkers(object = marker_obj, 
               only.pos = FALSE,
               min.pct = 0.25,
               logfc.threshold = 0,
@@ -138,8 +166,8 @@ xenium.obj <- readRDS(opt$init_file)
             )
 
             cmarkers <- markers_summary(marktab = all_markers,
-                  annot = xenium.obj@meta.data,
-                  datavis = GetAssayData(xenium.obj),
+                  annot = marker_obj@meta.data,
+                  datavis = GetAssayData(marker_obj),
                   cluster_column = cluster_value,
                   datatype = "SeuratNormalized",
                   verbose = opt$verbose)
@@ -162,11 +190,11 @@ xenium.obj <- readRDS(opt$init_file)
             print(void[[2]])
             dev.off()
             
-            genes_to_sum<-rownames(xenium.obj)[!rownames(xenium.obj) %in% cmarkers$gene]
+            genes_to_sum<-rownames(marker_obj)[!rownames(marker_obj) %in% cmarkers$gene]
 
             to_join_stats_gene<-stats_summary_table(
-                mat = GetAssayData(xenium.obj),
-                groups = make_list(x = xenium.obj@meta.data, colname = cluster_value, grouping = TRUE),
+                mat = GetAssayData(marker_obj),
+                groups = make_list(x = marker_obj@meta.data, colname = cluster_value, grouping = TRUE),
                 rnames = genes_to_sum,
                 datatype = "SeuratNormalized",
                 verbose = TRUE
@@ -199,12 +227,15 @@ xenium.obj <- readRDS(opt$init_file)
             repet_plot<-c(0:ceiling(length(feat_clust)/4))  ### Check Donas genes modi
             lapply(repet_plot, function(nplot){ 
               nplot<-nplot*4
-              try(print(FeaturePlot(xenium.obj,features = feat_clust[nplot:(nplot+3)], max.cutoff="q10")))
+              try(print(FeaturePlot(xenium.obj,features = feat_clust[nplot:(nplot+3)], max.cutoff="q10", order = TRUE)))
               })
             dev.off()
             }) 
+          rm(marker_obj)
+      }
 
         rm(xenium.obj); rm(cmarkers_f1); rm(aver)
+
       
 if(opt$verbose) cat("Saving output file for snakemake \n")
 done_file <- paste0(".", gsub("init", "markers", opt$prefix), ".txt")

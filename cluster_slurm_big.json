@@ -15,23 +15,23 @@
     },
     "init_object":
     {
-        "walltime" : "25:00:00",
+        "walltime" : "72:00:00",
         "cores" : "1",
-        "processor" : "6",
-        "memory" : "400"
+        "processor" : "1",
+        "memory" : "550"
     },
     "report_components":
     {
         "walltime" : "3:00:00",
         "cores" : "1",
         "processor" : "1",
-        "memory" : "300"
+        "memory" : "100"
     },
     "markers":
     {
-        "walltime" : "24:00:00",
+        "walltime" : "48:00:00",
         "cores" : "1",
         "processor" : "4",
-        "memory" : "400"
+        "memory" : "300"
     }
 }

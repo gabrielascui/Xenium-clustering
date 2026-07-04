@@ -17,7 +17,7 @@
 lib4.3path = "/home/fcastaneda/R/x86_64-pc-linux-gnu-library/4.3"
 if(grepl("4.3", getRversion()) && file.exists(lib4.3path))
   .libPaths(new = lib4.3path)
-options(future.globals.maxSize= 13312*1024^2)
+options(future.globals.maxSize= 20480*1024^2)
 
 library(optparse)
 optlist <- list(
@@ -50,20 +50,10 @@ optlist <- list(
 # Getting arguments from command line
 opt <- optparse::parse_args(optparse::OptionParser(option_list = optlist))
 
-resources = c(
-  "/home/ciro/scripts/handy_functions/devel/file_reading.R", # readfile
-  "/home/fcastaneda/bin/quality_control/utilities.R",
-  "/home/kmlanderos/scripts/handy_functions/devel/filters.R", # sample_even
-  "/home/ciro/scripts/clustering/R/plotting.R",  # variable_features_report
-  #"/home/fcastaneda/bin/clustering/R/plotting.R" #plots of clustering pipeline
-  "/home/ciro/scripts/handy_functions/R/stats_summary_table.R", # stats_summary_table
-  "/home/ciro/scripts/figease/figease.R",
-  "/home/ciro/scripts/handy_functions/devel/plots.R",
-  "/home/ciro/scripts/handy_functions/devel/utilities.R"
-)
-for(i in resources){ source(i) }
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1])
+script_dir <- if(length(script_file) && !is.na(script_file)) dirname(normalizePath(script_file)) else "R"
+source(file.path(script_dir, "functions.R"))
 
-#source("/home/ciro/scripts/figease/figease.R")
 library(ggplot2)
 library(reshape2)
 library(dplyr)
@@ -79,12 +69,12 @@ ggplotColours <- function(n = 6, h = c(0, 360) + 15){
 
 # opt parameters have the priority
 if(interactive()){ # Example/manually
-  opt$yaml = "/home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/config.yaml"
+  opt$yaml = "config.yaml"
   opt$verbose <- TRUE
   opt$percent <- 30
-  opt$chosen_comp <- 30
-  opt$init_file <- ".object_init_mean0.01_pct30_pc30.rds"
-  opt$prefix <- "init_mean0.01_pct30_pc30"
+  opt$chosen_comp <- 15
+  opt$init_file <- ".object_init_mean0.01_pct30_pc15.rds"
+  opt$prefix <- "init_mean0.01_pct30_pc15"
 }
 
 config = yaml::read_yaml(opt$yaml)
@@ -106,7 +96,7 @@ if(!grepl(checking_init, opt$init_file)) stop("Init file doesn't mach with pct o
 xenium.obj <- readRDS(opt$init_file)
 resolutions <- config$resolution
   lapply(resolutions, function(resolution_cho){
-        # resolution_cho<-resolutions[2]
+        # resolution_cho<-resolutions[1]
         comn_resolution<<-paste0(pcts, "pct", pc, "pc_res",resolution_cho)
         if(!dir.exists(comn_resolution)) dir.create(comn_resolution)
         cat(paste("Performing: ",comn_resolution, "\n"))
@@ -133,7 +123,9 @@ resolutions <- config$resolution
         dev.off()
 
         pdf(paste0(comn_resolution, "/3.UMAP_inSpatial.pdf"), height=36, width=84)
-        print(ImageDimPlot(xenium.obj, size = 2, border.size=NA,dark.background = TRUE, group.by=cluster_value))
+        for (fov in names(xenium.obj@images)){
+        print(ImageDimPlot(xenium.obj, size = 2, fov = fov, border.size=NA,dark.background = TRUE, group.by=cluster_value))
+        }
         dev.off() 
 
         umap_tissue_plot <- ImageDimPlot(xenium.obj, size = 0.5, border.size=NA,dark.background = TRUE, group.by=cluster_value)
@@ -142,7 +134,9 @@ resolutions <- config$resolution
         htmlwidgets::saveWidget(interactive_plot, paste0(comn_resolution,"/3.UMAP_inSpatial", ".html"))
 
         pdf(paste0(comn_resolution, "/3.UMAP_inSpatial_per_cluster.pdf"), height=54, width=126)
-        print(ImageDimPlot(xenium.obj, size = 5, border.size=NA,dark.background = TRUE, group.by=cluster_value, split.by = cluster_value))
+        for (fov in names(xenium.obj@images)){
+        print(ImageDimPlot(xenium.obj, size = 5, fov = fov, border.size=NA,dark.background = TRUE, group.by=cluster_value, split.by = cluster_value))
+        }
         dev.off() 
 
         xenium.obj@meta.data$cellnames <- rownames(xenium.obj@meta.data)
@@ -167,11 +161,11 @@ resolutions <- config$resolution
           resdir <- paste0(comn_resolution, "/")
           prop.normalise = TRUE
 
-          confounders <- grep("V1", confounders, value=TRUE, invert=TRUE)
+          confounders <- grep("V1|cells", confounders, value=TRUE, invert=TRUE)
 
           metadata$Identity <- factor(
           metadata[, cluster_value],
-          levels = gtools::mixedsort(unique(as.character(metadata[, cluster_value]))))
+          levels = mixedsort(unique(as.character(metadata[, cluster_value]))))
 
 
         centers <- list()
@@ -183,12 +177,13 @@ resolutions <- config$resolution
             summarize(x = median(x = x1234), y = median(x = y1234))
         }; metadata <- metadata[, !colnames(metadata) %in% c("x1234", "y1234")]
 
+        if(length(levels(metadata$Identity)) > 1) {
           for(orig in confounders){
-            # orig<-confounders[2]
+            # orig<-confounders[1]
             if(opt$verbose) cat("   #", orig, "\n")
             df_plots <- metadata[!is.na(metadata[, orig]), ]
             df_plots <- df_plots[df_plots[, orig] != "", ]
-            identity_levels <- gtools::mixedsort(unique(as.character(df_plots[, orig])))
+            identity_levels <- mixedsort(unique(as.character(df_plots[, orig])))
             df_plots$var_interest <- factor(df_plots[, orig], levels = identity_levels)
             identities <- table(df_plots$var_interest) # needs the size per identity
             if(length(identities) == 1){ if(opt$verbose) cat(" (N = 1)\n"); next }
@@ -251,13 +246,16 @@ resolutions <- config$resolution
               fname_i = paste0(fname, "_", rdim, "_inSpatial.pdf"); if(opt$verbose) cat(" -", rdim, "\n")
               
               pdf(fname_i, height=54, width=126)
-              print(ImageDimPlot(xenium.obj, size = 5, border.size=NA,dark.background = TRUE, group.by=orig))
+              for (fov in names(xenium.obj@images)){
+              print(ImageDimPlot(xenium.obj, size = 5, fov = fov, border.size=NA,dark.background = TRUE, group.by=orig))
+              }
               dev.off() 
             }; cat("\n")
 
 
 
           }
+        }
 
             rm(xenium.obj);
   })

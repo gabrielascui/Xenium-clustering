@@ -1,0 +1,3 @@
+WorkflowError in line 5 of /mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/snakem_try/Snakefile:
+Config file config.yaml not found.
+  File "/mnt/bioadhoc/Groups/vd-vijay/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/snakem_try/Snakefile", line 5, in <module>

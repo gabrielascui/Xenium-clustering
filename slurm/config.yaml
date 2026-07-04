@@ -15,7 +15,7 @@ cluster:
     --output=logs/{rule}/s.{rule}.o%j
     --error=logs/{rule}/s.{rule}.e%j
 
-cluster-config: /home/fcastaneda/bin/spatial_clustering/cluster_slurm.json 
+cluster-config: /home/fcastaneda/bin/spatial_clustering/cluster_slurm.json
 
 cluster-status: /home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/snakem_try/slurm/slurm/status-sacct.sh
 jobscript: /home/fcastaneda/fcastaneda-temp/rnaseq-sc-standar/biopBal_Sara_2024/spatial_pilot_5k/scripts/devel/snakem_try/slurm/slurm/slurm-jobscript.sh
